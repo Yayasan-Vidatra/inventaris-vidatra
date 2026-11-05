@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AssetQrRedirectController;
+use App\Http\Controllers\PublicAssetPageController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -15,6 +16,16 @@ Route::get('/a/{asset}', AssetQrRedirectController::class)
     ->withTrashed()
     ->middleware('throttle:qr-redirect')
     ->name('asset.qr-redirect');
+
+/*
+| Public, read-only asset page reached from the QR on labels printed from now on
+| (`{QR_BASE_URL}/q/{token}`). Serves the SPA shell with HTTP 200, or 404 when the
+| token is unknown / the asset is soft-deleted. No authentication; the data comes
+| from the allowlisted `GET /api/public/assets/{token}`. See PublicAssetPageController.
+*/
+Route::get('/q/{token}', PublicAssetPageController::class)
+    ->middleware('throttle:public-asset')
+    ->name('asset.public');
 
 /*
 | The React SPA is served for every non-API path. `/api/*` is deliberately

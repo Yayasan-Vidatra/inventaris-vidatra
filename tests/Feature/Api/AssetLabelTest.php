@@ -17,7 +17,8 @@ use Tests\TestCase;
  *   `GET  /api/assets/{asset}/label`
  *   `POST /api/assets/batch/label`
  *
- * QR codes are Strategi B (§6.0): the QR target is `{qr_base_url}/a/{asset->id}` —
+ * QR codes target the public page `{qr_base_url}/q/{public token}` (labels printed
+ * before public QR access encoded `/a/{asset->id}`, which still works for staff) —
  * never asset_code, never any other asset attribute. These tests verify that
  * contract directly against {@see AssetLabelPdfService}, plus the HTTP-level
  * authorization, validation, atomicity and PDF-response behaviour.
@@ -34,14 +35,15 @@ class AssetLabelTest extends TestCase
 
     /* ------------------------------------------------------------------ QR target URL */
 
-    public function test_qr_target_url_uses_asset_id_not_asset_code(): void
+    public function test_qr_target_url_uses_the_public_token_not_id_or_asset_code(): void
     {
         $asset = $this->existingAsset('001');
         $service = app(AssetLabelPdfService::class);
 
         $url = $service->qrTargetUrl($asset);
 
-        $this->assertSame('https://qr.inventaris-vidatra.test/a/'.$asset->id, $url);
+        $this->assertMatchesRegularExpression('#^https://qr\.inventaris-vidatra\.test/q/[0-9a-f]{32}$#', $url);
+        $this->assertStringNotContainsString('/a/'.$asset->id, $url);
         $this->assertStringNotContainsString($asset->asset_code, $url);
         $this->assertStringNotContainsString($asset->sequence_no, $url);
     }
@@ -442,17 +444,24 @@ class AssetLabelTest extends TestCase
     }
 
     /**
-     * The PDF renderer itself must never touch the database — every asset it needs
-     * is already loaded before {@see AssetLabelPdfService::renderBatch()} is called.
+     * Every asset the renderer needs is already loaded before
+     * {@see AssetLabelPdfService::renderBatch()} is called. Its only database work is
+     * the public QR tokens, done in bulk: the first print reads + inserts the missing
+     * tokens + reads them back (3 queries), a later print only reads them (1 query) —
+     * the same count for 5 labels as for 10, never one query per label.
      */
-    public function test_label_rendering_issues_no_database_queries(): void
+    public function test_label_rendering_queries_are_constant_regardless_of_batch_size(): void
     {
-        $assets = collect(range(1, 5))->map(fn ($i) => $this->existingAsset(str_pad((string) $i, 3, '0', STR_PAD_LEFT)));
-        $service = app(AssetLabelPdfService::class);
+        $five = collect(range(1, 5))->map(fn ($i) => $this->existingAsset(str_pad((string) $i, 3, '0', STR_PAD_LEFT)));
+        $ten = collect(range(11, 20))->map(fn ($i) => $this->existingAsset(str_pad((string) $i, 3, '0', STR_PAD_LEFT)));
 
-        $count = $this->countQueries(fn () => $service->renderBatch($assets)->output());
+        $firstFive = $this->countQueries(fn () => app(AssetLabelPdfService::class)->renderBatch($five)->output());
+        $firstTen = $this->countQueries(fn () => app(AssetLabelPdfService::class)->renderBatch($ten)->output());
+        $againTen = $this->countQueries(fn () => app(AssetLabelPdfService::class)->renderBatch($ten)->output());
 
-        $this->assertSame(0, $count);
+        $this->assertSame(3, $firstFive);
+        $this->assertSame(3, $firstTen);
+        $this->assertSame(1, $againTen);
     }
 
     private function countQueries(callable $callback): int

@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\ImportTemplateController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\MutationRevertController;
+use App\Http\Controllers\Api\PublicAssetController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\RoomAliasController;
 use App\Http\Controllers\Api\RoomController;
@@ -42,6 +43,19 @@ use Illuminate\Support\Facades\Route;
 // throttle:login (Tahap 6.6, H-1) — see AppServiceProvider::configureLoginRateLimiter()
 // for the dual email+IP / IP-only limit design.
 Route::post('login', [AuthController::class, 'login'])->middleware('throttle:login')->name('api.login');
+
+// --- public QR access: read-only, NO authentication ---
+// One asset by its random public token (never by id); no listing, search or
+// mutation. throttle:public-asset — see AppServiceProvider::configurePublicAssetRateLimiter().
+Route::middleware('throttle:public-asset')->prefix('public')->group(function () {
+    Route::get('assets/{token}', [PublicAssetController::class, 'show'])
+        ->where('token', '[0-9a-f]{32}')
+        ->name('api.public.assets.show');
+    Route::get('assets/{token}/photos/{slot}', [PublicAssetController::class, 'photo'])
+        ->where('token', '[0-9a-f]{32}')
+        ->where('slot', '[1-3]')
+        ->name('api.public.assets.photo');
+});
 
 // --- authenticated + active ---
 Route::middleware(['auth:sanctum', 'auth.active'])->group(function () {

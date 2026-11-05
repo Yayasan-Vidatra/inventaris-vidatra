@@ -34,6 +34,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureLoginRateLimiter();
         $this->configureQrRedirectRateLimiter();
         $this->configureAssetPhotoRateLimiter();
+        $this->configurePublicAssetRateLimiter();
         $this->configurePasswordChangeRateLimiter();
     }
 
@@ -99,6 +100,20 @@ class AppServiceProvider extends ServiceProvider
             $key = $request->user() !== null ? 'user:'.$request->user()->getAuthIdentifier() : 'ip:'.(string) $request->ip();
 
             return Limit::perMinute((int) config('inventory.photos.upload_per_minute', 30))->by('asset-photo-upload:'.$key);
+        });
+    }
+
+    /**
+     * Public QR access — `/q/{token}` and `/api/public/assets/{token}[/photos/{slot}]`
+     * are unauthenticated, so they are limited per IP. One page view costs the
+     * shell + one detail request + up to three photos; 120/min leaves room for a
+     * room full of people scanning labels while still blunting token guessing
+     * (which 128-bit tokens already make pointless).
+     */
+    private function configurePublicAssetRateLimiter(): void
+    {
+        RateLimiter::for('public-asset', function (Request $request) {
+            return Limit::perMinute(120)->by('public-asset:ip:'.(string) $request->ip());
         });
     }
 

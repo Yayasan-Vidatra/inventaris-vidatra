@@ -15,6 +15,7 @@ import Inventory from './pages/Inventory';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import MasterData from './pages/MasterData';
+import PublicAsset from './pages/PublicAsset';
 import Reports from './pages/Reports';
 import Rooms from './pages/Rooms';
 import Trash from './pages/Trash';
@@ -45,6 +46,9 @@ function App() {
               </GuestRoute>
             }
           />
+
+          {/* Public, read-only asset page from a label QR — no login, signed in or not. */}
+          <Route path="/q/:token" element={<PublicAsset />} />
 
           <Route
             element={

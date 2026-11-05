@@ -4,6 +4,7 @@ namespace App\Services\Label;
 
 use App\Exceptions\QrBaseUrlNotConfiguredException;
 use App\Models\Asset;
+use App\Services\Asset\AssetPublicTokenService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Barryvdh\DomPDF\PDF as PdfDocument;
 use Endroid\QrCode\Encoding\Encoding;
@@ -34,9 +35,11 @@ use Illuminate\Support\Collection;
  *
  * Strictly READ-ONLY with respect to the asset domain: this class never writes
  * to `assets` (it only ever reads `id` / `asset_code`) and never persists a QR
- * image anywhere. Each QR is rendered in memory (GD, via endroid/qr-code) and
- * embedded straight into the PDF as a base64 data URI — no temp file, no DB
- * column, nothing left behind after the response is sent. Every render method
+ * image anywhere. The one row it may cause to be written is the asset's public
+ * QR token, created once on first print by {@see AssetPublicTokenService}.
+ * Each QR is rendered in memory (GD, via endroid/qr-code) and embedded
+ * straight into the PDF as a base64 data URI — no temp file, no image column,
+ * nothing left behind after the response is sent. Every render method
  * here, including {@see renderIndividualMulti()}, is purely in-memory — there
  * is nothing to clean up.
  *
@@ -58,6 +61,8 @@ use Illuminate\Support\Collection;
  */
 class AssetLabelPdfService
 {
+    public function __construct(private readonly AssetPublicTokenService $publicTokens) {}
+
     /* ------------------------------------------------------------------ print sizes (Tahap 6.0.2) */
 
     public const SIZE_SMALL = 'small';
@@ -166,12 +171,33 @@ class AssetLabelPdfService
     private ?string $logoDataUriCache = null;
 
     /**
-     * The stable QR target URL for one asset: {qr_base_url}/a/{asset->id}.
-     * Deliberately keyed on the database id — never asset_code/sequence_no/room —
-     * so a printed tag keeps resolving to the same record across room moves,
-     * write-offs, or any other lifecycle change (Tahap 6.0, "Strategi B").
+     * The stable QR target URL for one asset: {qr_base_url}/q/{public token} —
+     * the public, read-only asset page. Keyed on the asset's random public token
+     * (never asset_code/sequence_no/room, and no longer the sequential database
+     * id), so a printed tag keeps resolving to the same record across room
+     * moves, write-offs, or any other lifecycle change, without letting anyone
+     * enumerate other assets. Labels printed before this change encode
+     * `/a/{id}`; that route still works for signed-in staff.
      */
     public function qrTargetUrl(Asset $asset): string
+    {
+        return $this->qrBaseUrl().'/q/'.$this->publicTokens->tokenFor($asset);
+    }
+
+    /**
+     * Multi-asset renders: create every missing public token in one round trip
+     * (instead of one per label), after the base URL is known to be configured
+     * so a misconfigured server never creates tokens for a PDF it cannot render.
+     *
+     * @param  Collection<int, Asset>  $assets
+     */
+    private function ensurePublicTokens(Collection $assets): void
+    {
+        $this->qrBaseUrl();
+        $this->publicTokens->ensureFor($assets);
+    }
+
+    private function qrBaseUrl(): string
     {
         $base = config('inventory.qr_base_url');
 
@@ -179,7 +205,7 @@ class AssetLabelPdfService
             throw new QrBaseUrlNotConfiguredException;
         }
 
-        return rtrim((string) $base, '/').'/a/'.$asset->id;
+        return rtrim((string) $base, '/');
     }
 
     /** `01.02.001.0004.2019` (canonical, DB) -> `01 - 02 - 001 - 0004 - 2019` (human-readable reference only — the label itself renders {@see codeCells()}, not this string). */
@@ -246,6 +272,7 @@ class AssetLabelPdfService
     public function renderIndividualMulti(Collection $assets, string $size = self::DEFAULT_SIZE): PdfDocument
     {
         $layout = $this->labelLayout($size);
+        $this->ensurePublicTokens($assets);
 
         return Pdf::loadView('labels.individual-multi', [
             'labels' => $assets->map(fn (Asset $asset) => $this->buildLabel($asset, $layout)),
@@ -266,6 +293,7 @@ class AssetLabelPdfService
     {
         $layout = $this->labelLayout($size);
         $capacity = $this->labelsPerPage($size);
+        $this->ensurePublicTokens($assets);
 
         $pages = $assets->values()->chunk($capacity)->values()->map(
             fn (Collection $pageAssets): Collection => $pageAssets->values()->map(

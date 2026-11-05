@@ -892,3 +892,26 @@ Request: `current_password`, `password`, `password_confirmation`.
   deleted (other devices are signed out on their next request) — with another driver that step
   is skipped and `other_sessions_ended` is `0`. The remember token is rotated and Sanctum
   personal access tokens (none are issued by the SPA) are revoked.
+
+## 20. Public QR access — `/q/{token}`, `GET /api/public/assets/{token}`
+
+Labels printed from now on encode `{INVENTORY_QR_BASE_URL}/q/{token}`. `token` is 32 lowercase
+hex characters (128 random bits), one per asset, stored in `asset_public_tokens`
+(`asset_id` PK, FK RESTRICT; `token` UNIQUE), created the first time a label is printed for the
+asset and never changed. Labels printed earlier encode `/a/{id}`; that route is unchanged and still
+redirects signed-in staff to the internal detail page — it is **not** public.
+
+No authentication; `throttle:public-asset` (120/min per IP) on all three routes:
+
+| Route | Response |
+|---|---|
+| `GET /q/{token}` | SPA shell; `200`, or `404` for a malformed/unknown token or a soft-deleted asset. `X-Robots-Tag: noindex, nofollow`. |
+| `GET /api/public/assets/{token}` | `{ data: { asset_code, name, category, location, room, condition, condition_label, status, status_label, photos: [{ slot, url }] } }` — an explicit allowlist (`PublicAssetResource`): no database id, no users, no audit/mutation data, no serial/brand/notes, no storage path. `name` is the subcategory name (assets have no separate name field). |
+| `GET /api/public/assets/{token}/photos/{slot}` | the JPEG of that slot (1–3) of **that** asset only; `404` when the slot is empty. |
+
+Unknown token and soft-deleted asset both answer the same plain `404` ("Aset tidak ditemukan.").
+A written-off asset is shown with `status: written_off` / "Dihapusbukukan". There is no listing,
+search or mutation endpoint under `/api/public` (other methods answer `405`).
+
+Migration: `2026_11_05_100000_create_asset_public_tokens_table` (new table only, no backfill);
+`down()` refuses while tokens exist (they may already be printed on labels).
