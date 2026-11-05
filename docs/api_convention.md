@@ -874,3 +874,21 @@ scheduler/queue).
 two ENUM values, still `NULL`, no default). Both `down()`s refuse to run — instead of silently
 losing data — while photo rows or photo history exist. Tested on MySQL 8.4; MariaDB 10.11 is
 verified separately.
+
+## 19. Ubah Kata Sandi sendiri — `PUT /api/me/password`
+
+Every signed-in, active user (any role) changes **their own** password. There is no user
+parameter: the target is always the session user, so no request field can point at another
+account. Route: `auth:sanctum` + `auth.active` + `throttle:password-change` (5/min per user).
+
+Request: `current_password`, `password`, `password_confirmation`.
+
+- `422` field errors: `current_password` (required; "Kata sandi saat ini tidak sesuai." when it
+  does not match the stored hash), `password` (required, min 12, confirmed, different from
+  `current_password`).
+- `200`: `{ "message": "Kata sandi berhasil diubah.", "other_sessions_ended": <int> }`.
+  The new password is stored through User's `hashed` cast. The current session is regenerated
+  (old id destroyed); with the `database` session driver every other session row of the user is
+  deleted (other devices are signed out on their next request) — with another driver that step
+  is skipped and `other_sessions_ended` is `0`. The remember token is rotated and Sanctum
+  personal access tokens (none are issued by the SPA) are revoked.

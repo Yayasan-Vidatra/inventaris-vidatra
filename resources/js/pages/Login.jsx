@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../auth/AuthContext';
+import PasswordInput from '../components/PasswordInput';
 import { ApiError } from '../lib/api';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -110,9 +111,8 @@ export default function Login() {
             <label htmlFor="password" className="mb-1 block text-sm font-medium text-gray-700">
               Kata Sandi
             </label>
-            <input
+            <PasswordInput
               id="password"
-              type="password"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

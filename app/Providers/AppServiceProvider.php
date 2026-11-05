@@ -34,6 +34,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureLoginRateLimiter();
         $this->configureQrRedirectRateLimiter();
         $this->configureAssetPhotoRateLimiter();
+        $this->configurePasswordChangeRateLimiter();
     }
 
     /**
@@ -98,6 +99,19 @@ class AppServiceProvider extends ServiceProvider
             $key = $request->user() !== null ? 'user:'.$request->user()->getAuthIdentifier() : 'ip:'.(string) $request->ip();
 
             return Limit::perMinute((int) config('inventory.photos.upload_per_minute', 30))->by('asset-photo-upload:'.$key);
+        });
+    }
+
+    /**
+     * `PUT /api/me/password` — per signed-in user, so a stolen session cannot be
+     * used to brute-force the account's current password.
+     */
+    private function configurePasswordChangeRateLimiter(): void
+    {
+        RateLimiter::for('password-change', function (Request $request) {
+            $key = $request->user() !== null ? 'user:'.$request->user()->getAuthIdentifier() : 'ip:'.(string) $request->ip();
+
+            return Limit::perMinute(5)->by('password-change:'.$key);
         });
     }
 }

@@ -8,6 +8,7 @@ import AppShell from './layouts/AppShell';
 import AssetDetail from './pages/AssetDetail';
 import AssetForm from './pages/AssetForm';
 import BatchAssetForm from './pages/BatchAssetForm';
+import ChangePassword from './pages/ChangePassword';
 import Dashboard from './pages/Dashboard';
 import Imports from './pages/Imports';
 import Inventory from './pages/Inventory';
@@ -64,6 +65,7 @@ function App() {
             <Route path="/trash" element={<Trash />} />
             <Route path="/users" element={<Users />} />
             <Route path="/master-data" element={<MasterData />} />
+            <Route path="/account/password" element={<ChangePassword />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -183,6 +183,12 @@ export default function AppShell() {
                 <p className="text-xs text-gray-500">{user?.email}</p>
               </div>
               <p className="hidden px-3 py-2 text-xs text-gray-500 sm:block">{user?.email}</p>
+              <NavLink
+                to="/account/password"
+                className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+              >
+                Ubah Kata Sandi
+              </NavLink>
               <button
                 type="button"
                 onClick={handleLogout}

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AccountPasswordController;
 use App\Http\Controllers\Api\AssetController;
 use App\Http\Controllers\Api\AssetExportController;
 use App\Http\Controllers\Api\AssetLabelController;
@@ -46,6 +47,12 @@ Route::post('login', [AuthController::class, 'login'])->middleware('throttle:log
 Route::middleware(['auth:sanctum', 'auth.active'])->group(function () {
     Route::post('logout', [AuthController::class, 'logout'])->name('api.logout');
     Route::get('me', [AuthController::class, 'me'])->name('api.me');
+    // Self-service password change for every role; the target is always the
+    // signed-in user (no user parameter). throttle:password-change — see
+    // AppServiceProvider::configurePasswordChangeRateLimiter().
+    Route::put('me/password', [AccountPasswordController::class, 'update'])
+        ->middleware('throttle:password-change')
+        ->name('api.me.password');
 
     // --- read API: any active user (viewer / operator / admin) ---
     Route::middleware('can:viewer')->group(function () {
